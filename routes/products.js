@@ -3,42 +3,45 @@ let router = express.Router()
 let { GenID, GetCateByID } = require('../utils/IDHandler')
 let slugify = require('slugify')
 let {dataProducts,dataCategories} = require('../utils/data')
+let productSchema = require('../schemas/products')
 
-router.get('/', (req, res) => {
-    let result = dataProducts.filter(
-        function (e) {
-            return !e.isDeleted
-        }
-    )
-    res.send(result)
-})
-router.get('/:id', (req, res) => {//req.params
-    let result = dataProducts.filter(
-        function (e) {
-            return e.id == req.params.id && !e.isDeleted;
-        }
-    )
-    res.send(result)
-})
-
-router.post('/', (req, res) => {
-    let newProducts = {
-        id: GenID(dataProducts),
-        title: req.body.title,
-        slug: slugify(req.body.title, {
-            replacement: '-',
-            lower: false,
-            remove: undefined,
-        }),
-        description: req.body.description,
-        category: GetCateByID(req.body.category, dataCategories),
-        images: req.body.images,
-        creationAt: new Date(Date.now()),
-        updatedAt: new Date(Date.now())
+router.get('/', async (req, res) => {
+    try {
+        let result = await productSchema.find({ isDeleted: false }).populate('category')
+        res.send(result)
+    } catch (error) {
+        res.status(500).send({ message: error.message })
     }
-    dataProducts.push(newProducts);
-    res.send(newProducts)
 })
+router.get('/:id', async (req, res) => {//req.params
+    try {
+        let result = await productSchema.findOne({ id: req.params.id, isDeleted: false }).populate('category')
+        res.send(result)
+    } catch (error) {
+        res.status(500).send({ message: error.message })
+    }
+})
+router.post('/', async (req, res) => {
+    try {
+        let newProduct = new productSchema({
+            title: req.body.title,
+            slug: slugify(req.body.title, {
+                replacement: '-',
+                lower: true, // Thường để slug là chữ thường
+                remove: undefined,
+            }),
+            price: req.body.price,
+            description: req.body.description,
+            category: req.body.category, // ID của category từ MongoDB
+            images: req.body.images
+        })
+        await newProduct.save()
+        res.status(201).send(newProduct)
+    } catch (error) {
+        res.status(400).send({ message: error.message })
+    }
+})
+
 router.put('/:id', (req, res) => {
     let getProduct = dataProducts.filter(
         function (e) {
